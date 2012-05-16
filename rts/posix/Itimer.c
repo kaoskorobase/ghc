@@ -44,6 +44,13 @@
 
 #include <string.h>
 
+#define USE_PTHREAD_FOR_ITIMER
+
+#if defined(USE_PTHREAD_FOR_ITIMER)
+#include <pthread.h>
+#include <unistd.h>
+#endif
+
 /*
  * We use a realtime timer by default.  I found this much more
  * reliable than a CPU timer:
@@ -89,6 +96,7 @@ static timer_t timer;
 
 static Time itimer_interval = DEFAULT_TICK_INTERVAL;
 
+#if !defined(USE_PTHREAD_FOR_ITIMER)
 static void install_vtalrm_handler(TickProc handle_tick)
 {
     struct sigaction action;
@@ -114,13 +122,31 @@ static void install_vtalrm_handler(TickProc handle_tick)
         stg_exit(EXIT_FAILURE);
     }
 }
+#endif
+
+#if defined(USE_PTHREAD_FOR_ITIMER)
+static volatile int itimer_enabled;
+static void *itimer_thread_func(void *_handle_tick)
+{
+    TickProc handle_tick = _handle_tick;
+    while (1) {
+        usleep(TimeToUS(itimer_interval));
+        if (itimer_enabled)
+            handle_tick(0);
+    }
+    return NULL;
+}
+#endif
 
 void
 initTicker (Time interval, TickProc handle_tick)
 {
     itimer_interval = interval;
 
-#if defined(USE_TIMER_CREATE)
+#if defined(USE_PTHREAD_FOR_ITIMER)
+    pthread_t tid;
+    pthread_create(&tid, NULL, itimer_thread_func, (void*)handle_tick);
+#elif defined(USE_TIMER_CREATE)
     {
         struct sigevent ev;
 
@@ -135,15 +161,18 @@ initTicker (Time interval, TickProc handle_tick)
             stg_exit(EXIT_FAILURE);
         }
     }
-#endif
-
     install_vtalrm_handler(handle_tick);
+#else
+    install_vtalrm_handler(handle_tick);
+#endif
 }
 
 void
 startTicker(void)
 {
-#if defined(USE_TIMER_CREATE)
+#if defined(USE_PTHREAD_FOR_ITIMER)
+    itimer_enabled = 1;
+#elif defined(USE_TIMER_CREATE)
     {
         struct itimerspec it;
         
@@ -175,7 +204,9 @@ startTicker(void)
 void
 stopTicker(void)
 {
-#if defined(USE_TIMER_CREATE)
+#if defined(USE_PTHREAD_FOR_ITIMER)
+    itimer_enabled = 0;
+#elif defined(USE_TIMER_CREATE)
     struct itimerspec it;
 
     it.it_value.tv_sec = 0;
