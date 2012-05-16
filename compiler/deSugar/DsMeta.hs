@@ -381,7 +381,7 @@ repForD (L loc (ForeignImport name typ _ (CImport cc s mch cis)))
     conv_cimportspec (CFunction DynamicTarget) = return "dynamic"
     conv_cimportspec (CFunction (StaticTarget fs _ True)) = return (unpackFS fs)
     conv_cimportspec (CFunction (StaticTarget _  _ False)) = panic "conv_cimportspec: values not supported yet"
-    conv_cimportspec CWrapper = return "wrapper"
+    conv_cimportspec (CWrapper poolCapacity) = return ("wrapper "++show poolCapacity)
     static = case cis of
                  CFunction (StaticTarget _ _ _) -> "static "
                  _ -> ""

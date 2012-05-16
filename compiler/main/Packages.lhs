@@ -867,7 +867,11 @@ collectLinkOpts :: DynFlags -> [PackageConfig] -> [String]
 collectLinkOpts dflags ps = concat (map all_opts ps)
   where
         libs p     = packageHsLibs dflags p ++ extraLibraries p
-        all_opts p = map ("-l" ++) (libs p) ++ ldOptions p
+        -- on iPhone we are using libtool, which doesn't do the final link, and
+        -- which doesn't understand most ld options. Therefore we are just
+        -- discarding any specified in packages, and requiring these to be added
+        -- by hand to Xcode where necessary.
+        all_opts p = map ("-l" ++) (libs p) -- ++ ldOptions p
 
 packageHsLibs :: DynFlags -> PackageConfig -> [String]
 packageHsLibs dflags p = map (mkDynName . addSuffix) (hsLibraries p)

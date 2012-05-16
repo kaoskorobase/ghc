@@ -150,7 +150,11 @@ includes/dist-derivedconstants/build/mkDerivedConstants.o : $(includes_H_CONFIG)
 
 ifneq "$(AlienScript)" ""
 $(INPLACE_BIN)/mkDerivedConstants$(exeext): includes/$(includes_dist-derivedconstants_C_SRCS) | $$(dir $$@)/.
+ifeq "$(AlienScript)" ""
 	$(WhatGccIsCalled) -o $@ $< $(CFLAGS) $(includes_CC_OPTS)
+else
+	$(AlienScript) compile -o $@ $< $(CFLAGS) $(includes_CC_OPTS)
+endif
 endif
 
 ifneq "$(BINDIST)" "YES"
@@ -190,7 +194,11 @@ includes/dist-ghcconstants/build/mkDerivedConstants.o : $(includes_H_CONFIG) $(i
 
 ifneq "$(AlienScript)" ""
 $(INPLACE_BIN)/mkGHCConstants$(exeext): includes/$(includes_dist-ghcconstants_C_SRCS) | $$(dir $$@)/.
+ifeq "$(AlienScript)" ""
 	$(WhatGccIsCalled) -o $@ $< $(CFLAGS) $(includes_CC_OPTS) $(includes_dist-ghcconstants_CC_OPTS)
+else
+	$(AlienScript) compile -o $@ $< $(CFLAGS) $(includes_CC_OPTS) $(includes_dist-ghcconstants_CC_OPTS)
+endif
 endif
 
 $(includes_GHCCONSTANTS) : $(INPLACE_BIN)/mkGHCConstants$(exeext) | $$(dir $$@)/.

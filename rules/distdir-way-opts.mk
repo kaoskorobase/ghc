@@ -183,10 +183,10 @@ $1_$2_$3_HSC2HS_LD_OPTS:=$$(shell for i in $$($1_$2_DIST_LD_OPTS); do echo \'--l
 endif
 
 $1_$2_$3_ALL_HSC2HS_OPTS = \
- --cc=$$(WhatGccIsCalled) \
- --ld=$$(WhatGccIsCalled) \
+ --cc=$$(CC_STAGE$4) \
+ --ld=$$(CC_STAGE$4) \
  $$(CONF_HSC2HS_OPTS) \
- $$(SRC_HSC2HS_OPTS) \
+ $$(SRC_HSC2HS_OPTS_STAGE$4) \
  $$(WAY_$3_HSC2HS_OPTS) \
  --cflag=-D__GLASGOW_HASKELL__=$$(if $$(filter 0,$4),$$(GhcCanonVersion),$$(ProjectVersionInt)) \
  --cflag=-D$$(HostArch_CPP)_HOST_ARCH=1 \

@@ -93,7 +93,7 @@ dsForeigns fos = do
       return (h, c, [], bs)
 
    do_decl (ForeignExport (L _ id) _ co (CExport (CExportStatic ext_nm cconv))) = do
-      (h, c, _, _) <- dsFExport id co ext_nm cconv False
+      (h, c, _, _) <- dsFExport id co ext_nm cconv False 32
       return (h, c, [id], [])
 \end{code}
 
@@ -158,8 +158,8 @@ dsCImport id co (CFunction target) cconv@PrimCallConv safety _
   = dsPrimCall id co (CCall (CCallSpec target cconv safety))
 dsCImport id co (CFunction target) cconv safety mHeader
   = dsFCall id co (CCall (CCallSpec target cconv safety)) mHeader
-dsCImport id co CWrapper cconv _ _
-  = dsFExportDynamic id co cconv
+dsCImport id co (CWrapper poolCapacity) cconv _ _
+  = dsFExportDynamic id co cconv poolCapacity
 
 -- For stdcall labels, if the type was a FunPtr or newtype thereof,
 -- then we need to calculate the size of the arguments in order to add
@@ -331,13 +331,14 @@ dsFExport :: Id                 -- Either the exported Id,
           -> Bool               -- True => foreign export dynamic
                                 --         so invoke IO action that's hanging off
                                 --         the first argument's stable pointer
+          -> Int                -- iPhone: Adjustor pool capacity
           -> DsM ( SDoc         -- contents of Module_stub.h
                  , SDoc         -- contents of Module_stub.c
                  , String       -- string describing type to pass to createAdj.
                  , Int          -- size of args to stub function
                  )
 
-dsFExport fn_id co ext_name cconv isDyn = do
+dsFExport fn_id co ext_name cconv isDyn poolCapacity = do
     let
        ty                              = pSnd $ coercionKind co
        (_tvs,sans_foralls)             = tcSplitForAllTys ty
@@ -360,7 +361,7 @@ dsFExport fn_id co ext_name cconv isDyn = do
     return $
       mkFExportCBits dflags ext_name
                      (if isDyn then Nothing else Just fn_id)
-                     fe_arg_tys res_ty is_IO_res_ty cconv
+                     fe_arg_tys res_ty is_IO_res_ty cconv poolCapacity
 \end{code}
 
 @foreign import "wrapper"@ (previously "foreign export dynamic") lets
@@ -397,8 +398,9 @@ f_helper(StablePtr s, HsBool b, HsInt i)
 dsFExportDynamic :: Id
                  -> Coercion
                  -> CCallConv
+                 -> Int  -- iPhone: Adjustor pool capacity
                  -> DsM ([Binding], SDoc, SDoc)
-dsFExportDynamic id co0 cconv = do
+dsFExportDynamic id co0 cconv poolCapacity = do
     fe_id <-  newSysLocalDs ty
     mod <- getModuleDs
     let
@@ -413,7 +415,7 @@ dsFExportDynamic id co0 cconv = do
         export_ty     = mkFunTy stable_ptr_ty arg_ty
     bindIOId <- dsLookupGlobalId bindIOName
     stbl_value <- newSysLocalDs stable_ptr_ty
-    (h_code, c_code, typestring, args_size) <- dsFExport id (Refl export_ty) fe_nm cconv True
+    (h_code, c_code, typestring, args_size) <- dsFExport id (Refl export_ty) fe_nm cconv True poolCapacity
     let
          {-
           The arguments to the external function which will
@@ -426,10 +428,12 @@ dsFExportDynamic id co0 cconv = do
                         , Var stbl_value
                         , Lit (MachLabel fe_nm mb_sz_args IsFunction)
                         , Lit (mkMachString typestring)
+                        , Lit (mkMachString $ unpackFS fe_nm)
+                        , Lit (MachLabel (fe_nm `appendFS` fsLit "_pool") Nothing IsData )
                         ]
           -- name of external entry point providing these services.
           -- (probably in the RTS.)
-        adjustor   = fsLit "createAdjustor"
+        adjustor   = fsLit "iPhoneCreateAdjustor"
 
           -- Determine the number of bytes of arguments to the stub function,
           -- so that we can attach the '@N' suffix to its label if it is a
@@ -485,12 +489,13 @@ mkFExportCBits :: DynFlags
                -> Type
                -> Bool          -- True <=> returns an IO type
                -> CCallConv
+               -> Int           -- iPhone: Number of adjustor pool entries
                -> (SDoc,
                    SDoc,
                    String,      -- the argument reps
                    Int          -- total size of arguments
                   )
-mkFExportCBits dflags c_nm maybe_target arg_htys res_hty is_IO_res_ty cc
+mkFExportCBits dflags c_nm maybe_target arg_htys res_hty is_IO_res_ty cc poolCapacity
  = (header_bits, c_bits, type_string,
     sum [ widthInBytes (typeWidth rep) | (_,_,_,rep) <- aug_arg_info] -- all the args
          -- NB. the calculation here isn't strictly speaking correct.
@@ -520,7 +525,7 @@ mkFExportCBits dflags c_nm maybe_target arg_htys res_hty is_IO_res_ty cc
         | otherwise = text ('a':show n)
 
   -- generate a libffi-style stub if this is a "wrapper" and libffi is enabled
-  libffi = cLibFFI && isNothing maybe_target
+  libffi = False  -- iPhone: Use non-libffi style
 
   type_string
       -- libffi needs to know the result type too:
@@ -533,7 +538,7 @@ mkFExportCBits dflags c_nm maybe_target arg_htys res_hty is_IO_res_ty cc
   -- add some auxiliary args; the stable ptr in the wrapper case, and
   -- a slot for the dummy return address in the wrapper + ccall case
   aug_arg_info
-    | isNothing maybe_target = stable_ptr_arg : insertRetAddr dflags cc arg_info
+    | isNothing maybe_target = stable_ptr_arg : arg_info  -- iPhone: No dummy return address
     | otherwise              = arg_info
 
   stable_ptr_arg =
@@ -562,12 +567,19 @@ mkFExportCBits dflags c_nm maybe_target arg_htys res_hty is_IO_res_ty cc
   -- Now we can cook up the prototype for the exported function.
   pprCconv = ccallConvAttribute cc
 
-  header_bits = ptext (sLit "extern") <+> fun_proto <> semi
+  header_bits = ptext (sLit "extern") <+> fun_proto <> semi $$
+         (if isNothing maybe_target
+             then text "extern" <> pool_decl <> semi
+             else empty)
 
-  fun_args
-    | null aug_arg_info = text "void"
+  mkEntryName idx = text (unpackFS c_nm ++ "_entry" ++ show idx)
+  
+  fun_args = fun_args_ aug_arg_info
+  
+  fun_args_ args
+    | null args = text "void"
     | otherwise         = hsep $ punctuate comma
-                               $ map (\(nm,ty,_,_) -> ty <+> nm) aug_arg_info
+                               $ map (\(nm,ty,_,_) -> ty <+> nm) args
 
   fun_proto
     | libffi
@@ -607,6 +619,8 @@ mkFExportCBits dflags c_nm maybe_target arg_htys res_hty is_IO_res_ty cc
           Nothing -> empty
           Just hs_fn -> text "extern StgClosure " <> ppr hs_fn <> text "_closure" <> semi
 
+  pool_decl =
+      text "void* " <> ftext c_nm <> text "_pool[" <> text (show (poolCapacity*2+1)) <> text "]"
 
   -- finally, the whole darn thing
   c_bits =
@@ -643,7 +657,38 @@ mkFExportCBits dflags c_nm maybe_target arg_htys res_hty is_IO_res_ty cc
                        ptext (sLit "resp = cret;")
                   else ptext (sLit "return cret;")
      , rbrace
-     ]
+     ] $$ (
+         if isNothing maybe_target
+             then pool
+             else empty)
+
+  pool =
+    -- iPhone: Due to Apple's code signing policy, we can't do self-modifying
+    -- code on the iPhone.  So instead, we pre-compile a pool of adjustors.
+    text "extern StgStablePtr iPhoneLookupAdjustor(void*)" <> semi $$
+    text "extern " <> pool_decl <> semi $$
+    vcat (
+        flip map [0..poolCapacity-1] $ \poolIdx ->
+            cResType <+> mkEntryName poolIdx <> parens (fun_args_ arg_info) $$
+            lbrace $$ (
+                (if res_hty_is_unit
+                    then empty
+                    else text "return ") <>
+                ftext c_nm <> parens (
+                    text "iPhoneLookupAdjustor" <> parens (
+                        ftext c_nm <> text "_pool+" <> text (show (poolIdx :: Int)) <> text "*2")
+                    <> (if null arg_info
+                        then empty
+                        else comma <+> hsep (punctuate comma $ map (\(nm,ty,_,_) -> nm) arg_info))
+                ) <> semi
+            ) $$ rbrace
+    ) $$
+    pool_decl <> text " = " <> lbrace $$
+    vcat (punctuate comma $
+            flip map [0..poolCapacity-1] $ \poolIdx ->
+                text "  " <> mkEntryName poolIdx <> comma <+> text "NULL"
+        ) <> comma $$
+    text "  NULL" <> rbrace <> semi
 
 
 foreignExportInitialiser :: Id -> SDoc
@@ -711,6 +756,7 @@ typeTyCon ty = case tcSplitTyConApp_maybe (repType ty) of
                  Just (tc,_) -> tc
                  Nothing     -> pprPanic "DsForeign.typeTyCon" (ppr ty)
 
+{-
 insertRetAddr :: DynFlags -> CCallConv
               -> [(SDoc, SDoc, Type, CmmType)]
               -> [(SDoc, SDoc, Type, CmmType)]
@@ -732,6 +778,7 @@ insertRetAddr dflags CCallConv args
       _ ->
           ret_addr_arg : args
 insertRetAddr _ _ args = args
+-}
 
 ret_addr_arg :: (SDoc, SDoc, Type, CmmType)
 ret_addr_arg = (text "original_return_addr", text "void*", undefined,

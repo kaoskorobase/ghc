@@ -309,7 +309,8 @@ endif
 # They do not say "this package will be built"; see $(PACKAGES_xx) for that
 
 # Packages that are built but not installed
-PKGS_THAT_ARE_INTREE_ONLY := haskeline mtl terminfo utf8-string xhtml
+#PKGS_THAT_ARE_INTREE_ONLY := haskeline mtl terminfo utf8-string xhtml
+PKGS_THAT_ARE_INTREE_ONLY := haskeline mtl utf8-string xhtml
 
 PKGS_THAT_ARE_DPH := \
     dph/dph-base \
@@ -423,7 +424,7 @@ $(eval $(call addPackage,transformers))
 $(eval $(call addPackage,mtl))
 $(eval $(call addPackage,utf8-string))
 $(eval $(call addPackage,xhtml))
-$(eval $(call addPackage,terminfo,($$(Windows),NO)))
+#$(eval $(call addPackage,terminfo,($$(Windows),NO)))
 $(eval $(call addPackage,haskeline))
 
 $(eval $(call extra-packages))
@@ -609,11 +610,13 @@ endif
 ifeq "$(BuildingCrossCompiler)-$(phase)" "YES-final"
 MAYBE_COMPILER=
 MAYBE_GHCTAGS=
+MAYBE_GHCPWD=
 MAYBE_HPC=
 MAYBE_RUNGHC=
 else
 MAYBE_COMPILER=compiler
 MAYBE_GHCTAGS=utils/ghctags
+MAYBE_GHCPWD=utils/ghc-pwd
 MAYBE_HPC=utils/hpc
 MAYBE_RUNGHC=utils/runghc
 endif
@@ -626,7 +629,7 @@ BUILD_DIRS += \
    $(GHC_PKG_DIR) \
    utils/testremove \
    $(MAYBE_GHCTAGS) \
-   utils/ghc-pwd \
+   $(MAYBE_GHCPWD) \
    $(GHC_CABAL_DIR) \
    $(MAYBE_HPC) \
    $(MAYBE_RUNGHC) \
@@ -640,7 +643,7 @@ endif
 endif
 
 BUILD_DIRS += utils/count_lines
-BUILD_DIRS += utils/compare_sizes
+#BUILD_DIRS += utils/compare_sizes
 
 ifneq "$(CLEANING)" "YES"
 # After compiler/, because these packages depend on it

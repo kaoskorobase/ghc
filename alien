@@ -1,0 +1,13 @@
+#!/bin/bash
+case $1 in
+    compile)
+        echo '>>>COMPILE>>>' $LOCAL_GCC $LOCAL_CPPFLAGS $LOCAL_CFLAGS "${@:2}"
+        exec $LOCAL_GCC $LOCAL_CPPFLAGS $LOCAL_CFLAGS "${@:2}"
+        ;;
+    run)
+        exec "${@:2}"
+        ;;
+    *)
+        echo "Unknown alien command: $1"
+        exit 1
+esac

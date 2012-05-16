@@ -1174,7 +1174,8 @@ runPhase As input_fn dflags
         let whichAsProg | hscTarget dflags == HscLlvm &&
                           platformOS (targetPlatform dflags) == OSDarwin
                         = do
-                            llvmVer <- io $ figureLlvmVersion dflags
+                            --llvmVer <- io $ figureLlvmVersion dflags
+                            let llvmVer = Nothing :: Maybe Int  -- ###
                             return $ case llvmVer of
                                 -- using cGccLinkerOpts here but not clear if
                                 -- opt_c isn't a better choice
@@ -1737,7 +1738,7 @@ linkBinary dflags o_files dep_packages = do
     let
         thread_opts | WayThreaded `elem` ways = [
 #if !defined(mingw32_TARGET_OS) && !defined(freebsd_TARGET_OS) && !defined(openbsd_TARGET_OS) && !defined(netbsd_TARGET_OS) && !defined(haiku_TARGET_OS)
-                        "-lpthread"
+                        --"-lpthread"
 #endif
 #if defined(osf3_TARGET_OS)
                         , "-lexc"
@@ -1746,8 +1747,13 @@ linkBinary dflags o_files dep_packages = do
                     | otherwise               = []
 
     rc_objs <- maybeCreateManifest dflags output_fn
+    
+    let removeDynLibs opts = [ o | o <- opts,
+           case o of
+               SysTools.FileOption _ _ -> True
+               SysTools.Option opt -> opt `notElem` ["-ldl", "-liconv", "-lm"] ]
 
-    SysTools.runLink dflags (
+    SysTools.runLibtool dflags $ removeDynLibs (
                        map SysTools.Option verbFlags
                       ++ [ SysTools.Option "-o"
                          , SysTools.FileOption "" output_fn
@@ -1815,7 +1821,10 @@ exeFileName dflags
       then if null (takeExtension s)
            then s <.> "exe"
            else s
-      else s
+      else
+           let (path, file) = splitFileName s
+           in  combine path (file++".a")  -- For iPhone we must link the executable into Xcode
+
   | otherwise =
       if platformOS (targetPlatform dflags) == OSMinGW32
       then "main.exe"

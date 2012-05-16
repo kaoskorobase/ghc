@@ -80,6 +80,7 @@ import Control.Applicative ((<$>))
 import Control.Monad
 import Text.ParserCombinators.ReadP as ReadP
 import Data.Char
+import Data.Maybe (fromMaybe)
 
 #include "HsVersions.h"
 \end{code}
@@ -854,25 +855,25 @@ mkInlinePragma (inl, match_info) mb_act
 --
 mkImport :: CCallConv
          -> Safety
-         -> (Located FastString, Located RdrName, LHsType RdrName)
+         -> (Located FastString, Maybe Int, Located RdrName, LHsType RdrName)
          -> P (HsDecl RdrName)
-mkImport cconv safety (L loc entity, v, ty)
+mkImport cconv safety (L loc entity, mPoolSize, v, ty)
   | cconv == PrimCallConv                      = do
   let funcTarget = CFunction (StaticTarget entity Nothing True)
       importSpec = CImport PrimCallConv safety Nothing funcTarget
   return (ForD (ForeignImport v ty noForeignImportCoercionYet importSpec))
 
   | otherwise = do
-    case parseCImport cconv safety (mkExtName (unLoc v)) (unpackFS entity) of
+    case parseCImport cconv safety mPoolSize (mkExtName (unLoc v)) (unpackFS entity) of
       Nothing         -> parseErrorSDoc loc (text "Malformed entity string")
       Just importSpec -> return (ForD (ForeignImport v ty noForeignImportCoercionYet importSpec))
 
 -- the string "foo" is ambigous: either a header or a C identifier.  The
 -- C identifier case comes first in the alternatives below, so we pick
 -- that one.
-parseCImport :: CCallConv -> Safety -> FastString -> String
+parseCImport :: CCallConv -> Safety -> Maybe Int -> FastString -> String
              -> Maybe ForeignImport
-parseCImport cconv safety nm str =
+parseCImport cconv safety mPoolSize nm str =
  listToMaybe $ map fst $ filter (null.snd) $
      readP_to_S parse str
  where
@@ -880,7 +881,7 @@ parseCImport cconv safety nm str =
        skipSpaces
        r <- choice [
           string "dynamic" >> return (mk Nothing (CFunction DynamicTarget)),
-          string "wrapper" >> return (mk Nothing CWrapper),
+          string "wrapper" >> return (mk Nothing (CWrapper $ fromMaybe 32 mPoolSize)),
           do optional (token "static" >> skipSpaces)
              ((mk Nothing <$> cimp nm) +++
               (do h <- munch1 hdr_char
@@ -925,9 +926,9 @@ parseCImport cconv safety nm str =
 -- construct a foreign export declaration
 --
 mkExport :: CCallConv
-         -> (Located FastString, Located RdrName, LHsType RdrName)
+         -> (Located FastString, Maybe Int, Located RdrName, LHsType RdrName)
          -> P (HsDecl RdrName)
-mkExport cconv (L _ entity, v, ty) = return $
+mkExport cconv (L _ entity, _, v, ty) = return $
   ForD (ForeignExport v ty noForeignExportCoercionYet (CExport (CExportStatic entity' cconv)))
   where
     entity' | nullFS entity = mkExtName (unLoc v)

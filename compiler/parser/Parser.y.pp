@@ -268,6 +268,7 @@ incorrect.
  '{-# VECTORISE_SCALAR'   { L _ ITvect_scalar_prag }
  '{-# NOVECTORISE'        { L _ ITnovect_prag }
  '{-# CTYPE'              { L _ ITctype }
+ '{-# POOLSIZE'           { L _ ITpoolsize_prag }
  '#-}'                                          { L _ ITclose_prag }
 
  '..'           { L _ ITdotdot }                        -- reserved symbols
@@ -945,12 +946,16 @@ safety :: { Safety }
         | 'safe'                        { PlaySafe }
         | 'interruptible'               { PlayInterruptible }
 
-fspec :: { Located (Located FastString, Located RdrName, LHsType RdrName) }
-       : STRING var '::' sigtypedoc     { LL (L (getLoc $1) (getSTRING $1), $2, $4) }
-       |        var '::' sigtypedoc     { LL (noLoc nilFS, $1, $3) }
+fspec :: { Located (Located FastString, Maybe Int, Located RdrName, LHsType RdrName) }
+       : STRING poolsize var '::' sigtypedoc     { LL (L (getLoc $1) (getSTRING $1), $2, $3, $5) }
+       |        poolsize var '::' sigtypedoc     { sL (comb2 $2 $>) (noLoc nilFS, $1, $2, $4) }
          -- if the entity string is missing, it defaults to the empty string;
          -- the meaning of an empty entity string depends on the calling
          -- convention
+
+poolsize :: { Maybe Int }
+          : '{-# POOLSIZE' INTEGER '#-}' { Just (fromInteger $ getINTEGER $2) }
+          | {- empty -}                  { Nothing }
 
 -----------------------------------------------------------------------------
 -- Type signatures

@@ -991,8 +991,9 @@ data ForeignImport = -- import of a C entity
 --
 data CImportSpec = CLabel    CLabelString     -- import address of a C label
                  | CFunction CCallTarget      -- static or dynamic function
-                 | CWrapper                   -- wrapper to expose closures
+                 | CWrapper  Int              -- wrapper to expose closures
                                               -- (former f.e.d.)
+                                              -- iPhone: With adjustor pool capacity
   deriving (Data, Typeable)
 
 -- specification of an externally exported entity in dependence on the calling
@@ -1030,7 +1031,7 @@ instance Outputable ForeignImport where
         <+> ppr lbl
       pprCEntity (CFunction (DynamicTarget)) =
         ptext (sLit "dynamic")
-      pprCEntity (CWrapper) = ptext (sLit "wrapper")
+      pprCEntity (CWrapper cap) = ptext (sLit "wrapper ") <+> ptext (sLit $ show cap)
 
 instance Outputable ForeignExport where
   ppr (CExport  (CExportStatic lbl cconv)) = 

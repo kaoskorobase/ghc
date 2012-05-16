@@ -53,6 +53,7 @@ $(libffi_STAMP_CONFIGURE): $(TOUCH_DEP)
 	$(call removeTrees,$(LIBFFI_DIR) libffi/build)
 	cat ghc-tarballs/libffi/libffi*.tar.gz | $(GZIP_CMD) -d | { cd libffi && $(TAR_CMD) -xf - ; }
 	mv libffi/libffi-* libffi/build
+	cat libffi/iphone.patch | (cd libffi/build && patch -p1)
 
 # We have to fake a non-working ln for configure, so that the fallback
 # option (cp -p) gets used instead.  Otherwise the libffi build system

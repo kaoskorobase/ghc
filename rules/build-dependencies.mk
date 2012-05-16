@@ -125,7 +125,7 @@ endef
 #    to "i" on Windows and "" on any other platform.
 define addCFileDeps
 
-	$(CPP) $($1_$2_MKDEPENDC_OPTS) $($1_$2_v_ALL_CC_OPTS) $($(basename $4)_CC_OPTS) -MM $4 -MF $3.bit
+	"$($1_$2_CC)" -E $($1_$2_MKDEPENDC_OPTS) $($1_$2_v_ALL_CC_OPTS) $($(basename $4)_CC_OPTS) -MM $4 -MF $3.bit
 	$(foreach w,$5,sed -e 's|\\|/|g' -e 's| /$$| \\|' -e "1s|\.o|\.$($w_osuf)|" -e "1s|^|$(dir $4)|" -e "1s|$1/|$1/$2/build/|" -e "1s|$2/build/$2/build|$2/build|g" -e "s|$(TOP)/||g$(CASE_INSENSITIVE_SED)" $3.bit >> $3.tmp &&) true
 endef
 

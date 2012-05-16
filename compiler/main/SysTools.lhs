@@ -16,7 +16,7 @@ module SysTools (
         runUnlit, runCpp, runCc, -- [Option] -> IO ()
         runPp,                   -- [Option] -> IO ()
         runSplit,                -- [Option] -> IO ()
-        runAs, runLink,          -- [Option] -> IO ()
+        runAs, runLink, runLibtool, -- [Option] -> IO ()
         runMkDLL,
         runWindres,
         runLlvmOpt,
@@ -539,6 +539,13 @@ figureLlvmVersion dflags = do
 runLink :: DynFlags -> [Option] -> IO ()
 runLink dflags args = do
   let (p,args0) = pgm_l dflags
+      args1 = args0 ++ args
+  mb_env <- getGccEnv args1
+  runSomethingFiltered dflags id "Linker" p args1 mb_env
+
+runLibtool :: DynFlags -> [Option] -> IO ()
+runLibtool dflags args = do
+  let (p,args0) = ("libtool", [Option "-static"])
       args1 = args0 ++ args
   mb_env <- getGccEnv args1
   runSomethingFiltered dflags id "Linker" p args1 mb_env

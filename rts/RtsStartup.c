@@ -104,6 +104,10 @@ x86_init_fpu ( void )
 }
 #endif
 
+#if defined(darwin_HOST_OS) || defined(darwin10_HOST_OS)
+  void iPhoneAdjustorInit(void);
+#endif
+
 /* -----------------------------------------------------------------------------
    Starting up the RTS
    -------------------------------------------------------------------------- */
@@ -260,6 +264,10 @@ hs_init_ghc(int *argc, char **argv[], RtsConfig rts_config)
     // ditto.
 #if defined(THREADED_RTS)
     ioManagerStart();
+#endif
+
+#if defined(darwin_HOST_OS) || defined(darwin10_HOST_OS)
+    iPhoneAdjustorInit();
 #endif
 
     /* Record initialization times */

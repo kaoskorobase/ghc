@@ -42,7 +42,111 @@ Haskell side.
 #include "RtsUtils.h"
 #include "Stable.h"
 
-#if defined(USE_LIBFFI_FOR_ADJUSTORS)
+#if defined(darwin_HOST_OS) || defined(darwin10_HOST_OS)
+
+#include "Hash.h"
+#include "ffi.h"
+
+/* iPhone, iPhone, iPhone, tsk, tsk...
+ *
+ * The iPhone doesn't allow self-modifying code, so instead we allocate out of
+ * a pool of pre-compiled functions.
+ */
+
+struct iPhoneAdjustor;
+
+struct iPhoneAdjustorEntry {
+    void* func;
+    struct iPhoneAdjustor* adjustor;
+};
+
+struct iPhoneAdjustor
+{
+    struct iPhoneAdjustorEntry* poolEntry;
+    StgStablePtr hptr;
+    StgFunPtr wptr;
+};
+
+#if defined(THREADED_RTS)
+static Mutex iPhoneAdjustorMutex;
+#endif
+
+static HashTable* allocatedAdjustors;
+void iPhoneAdjustorInit(void);
+void* iPhoneCreateAdjustor(int cconv, 
+                StgStablePtr hptr,
+                StgFunPtr wptr,
+                char *typeString,
+                char* descr,
+                struct iPhoneAdjustorEntry* pool);
+StgStablePtr iPhoneLookupAdjustor(void* entry_);
+
+void
+iPhoneAdjustorInit()
+{
+#if defined(THREADED_RTS)
+    initMutex(&iPhoneAdjustorMutex);
+#endif
+    allocatedAdjustors = allocHashTable();
+}
+
+void*
+iPhoneCreateAdjustor(int cconv, 
+                StgStablePtr hptr,
+                StgFunPtr wptr,
+                char *typeString,
+                char* descr,
+                struct iPhoneAdjustorEntry* pool)
+{
+    int i;
+
+
+    ACQUIRE_LOCK(&iPhoneAdjustorMutex);
+    /* Look for a free slot in the function pool. */
+    for (i = 0; pool[i].func != NULL; i ++) {
+        if (pool[i].adjustor == NULL) {
+            struct iPhoneAdjustor* adj = stgMallocBytes(sizeof(struct iPhoneAdjustor),
+                                            "iPhoneAdjustor");
+            pool[i].adjustor = adj;
+            insertHashTable(allocatedAdjustors, (StgWord)pool[i].func, adj);
+            RELEASE_LOCK(&iPhoneAdjustorMutex);
+            adj->poolEntry = pool + i;
+            adj->hptr = hptr;
+            adj->wptr = wptr;
+            return pool[i].func;
+        }
+    }
+    RELEASE_LOCK(&iPhoneAdjustorMutex);
+    barf("iPhoneCreateAdjustor - adjustor pool '%s' is empty (capacity %d)", descr, i);
+}
+
+StgStablePtr iPhoneLookupAdjustor(void* entry_)
+{
+    struct iPhoneAdjustorEntry* entry = (struct iPhoneAdjustorEntry*) entry_;
+    return entry->adjustor->hptr;
+}
+
+void
+freeHaskellFunctionPtr(void* ptr)
+{
+    struct iPhoneAdjustor* adj;
+
+    ACQUIRE_LOCK(&iPhoneAdjustorMutex);
+    adj = lookupHashTable(allocatedAdjustors, (StgWord)ptr);
+    if (adj != NULL) {
+        removeHashTable(allocatedAdjustors, (StgWord)ptr, adj);
+        adj->poolEntry->adjustor = NULL;
+        RELEASE_LOCK(&iPhoneAdjustorMutex);
+
+        freeStablePtr(adj->hptr);
+        stgFree(adj);
+    }
+    else {
+        RELEASE_LOCK(&iPhoneAdjustorMutex);
+    }
+}
+
+#elif defined(USE_LIBFFI_FOR_ADJUSTORS)
 #include "ffi.h"
 #include <string.h>
 #endif
@@ -56,7 +160,7 @@ extern void adjustorCode(void);
 extern void *adjustorCode;
 #endif
 
-#if defined(USE_LIBFFI_FOR_ADJUSTORS)
+#if defined(USE_LIBFFI_FOR_ADJUSTORS) && !(defined(darwin_HOST_OS) || defined(darwin10_HOST_OS))
 void
 freeHaskellFunctionPtr(void* ptr)
 {
@@ -1177,7 +1281,7 @@ TODO: Depending on how much allocation overhead stgMallocBytes uses for
   return code;
 }
 
-
+#if !(defined(darwin_HOST_OS) || defined(darwin10_HOST_OS))
 void
 freeHaskellFunctionPtr(void* ptr)
 {
@@ -1248,5 +1352,6 @@ freeHaskellFunctionPtr(void* ptr)
 
  freeExec(ptr);
 }
+#endif
 
 #endif // !USE_LIBFFI_FOR_ADJUSTORS

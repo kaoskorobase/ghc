@@ -212,7 +212,7 @@ tcCheckFIType sig_ty arg_tys res_ty (CImport cconv safety mh l@(CLabel _))
        cconv' <- checkCConv cconv
        return (CImport cconv' safety mh l)
 
-tcCheckFIType sig_ty arg_tys res_ty (CImport cconv safety mh CWrapper) = do
+tcCheckFIType sig_ty arg_tys res_ty (CImport cconv safety mh (CWrapper poolCapacity)) = do
         -- Foreign wrapper (former f.e.d.)
         -- The type must be of the form ft -> IO (FunPtr ft), where ft is a valid
         -- foreign type.  For legacy reasons ft -> IO (Ptr ft) is accepted, too.
@@ -226,7 +226,7 @@ tcCheckFIType sig_ty arg_tys res_ty (CImport cconv safety mh CWrapper) = do
                   where
                      (arg1_tys, res1_ty) = tcSplitFunTys arg1_ty
         _ -> addErrTc (illegalForeignTyErr empty sig_ty)
-    return (CImport cconv' safety mh CWrapper)
+    return (CImport cconv' safety mh (CWrapper poolCapacity))
 
 tcCheckFIType sig_ty arg_tys res_ty idecl@(CImport cconv safety mh (CFunction target))
   | isDynamicTarget target = do -- Foreign import dynamic

@@ -15,6 +15,7 @@
 
 # We build the RTS with stage 1
 rts_dist_HC = $(GHC_STAGE1)
+rts_dist_CC = $(CC_STAGE1)
 
 # merge GhcLibWays and GhcRTSWays but strip out duplicates
 rts_WAYS = $(GhcLibWays) $(filter-out $(GhcLibWays),$(GhcRTSWays))
@@ -505,6 +506,7 @@ rts_PACKAGE_CPP_OPTS += -DHAVE_LIBMINGWEX
 endif
 
 $(eval $(call manual-package-config,rts))
+$1_$2_CC = $$(CC_STAGE$3)
 
 ifneq "$(BootingFromHc)" "YES"
 rts/package.conf.inplace : $(includes_H_CONFIG) $(includes_H_PLATFORM)

@@ -493,6 +493,7 @@ data Token
   | ITvect_prag
   | ITvect_scalar_prag
   | ITnovect_prag
+  | ITpoolsize_prag
   | ITctype
 
   | ITdotdot                    -- reserved symbols
@@ -2333,7 +2334,8 @@ oneWordPrags = Map.fromList([("rules", rulePrag),
                            ("ann", token ITann_prag),
                            ("vectorize", token ITvect_prag),
                            ("novectorize", token ITnovect_prag),
-                           ("ctype", token ITctype)])
+                           ("ctype", token ITctype),
+                           ("poolsize", token ITpoolsize_prag)])
 
 twoWordPrags = Map.fromList([("inline conlike", token (ITinline_prag Inline ConLike)),
                              ("notinline conlike", token (ITinline_prag NoInline ConLike)),

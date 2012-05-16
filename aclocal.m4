@@ -202,6 +202,9 @@ AC_DEFUN([FPTOOLS_SET_HASKELL_PLATFORM_VARS],
         darwin)
             test -z "[$]2" || eval "[$]2=OSDarwin"
             ;;
+        darwin10)
+            test -z "[$]2" || eval "[$]2=OSDarwin"
+            ;;
         solaris2)
             test -z "[$]2" || eval "[$]2=OSSolaris2"
             ;;
@@ -684,7 +687,7 @@ AC_CACHE_CHECK([leading underscore in symbol names], [fptools_cv_leading_undersc
 #
 # Another hack: cygwin doesn't come with nlist.h , so we hardwire
 # the underscoredness of that "platform"
-case $HostPlatform in
+case $TargetPlatform in
 *openbsd*) # x86 openbsd is ELF from 3.4 >, meaning no leading uscore
   case $build in
     i386-*2\.@<:@0-9@:>@ | i386-*3\.@<:@0-3@:>@ ) fptools_cv_leading_underscore=yes ;;
@@ -697,6 +700,7 @@ x86_64-unknown-mingw32) fptools_cv_leading_underscore=no;;
 
     # HACK: Apple doesn't seem to provide nlist in the 64-bit-libraries
 x86_64-apple-darwin*) fptools_cv_leading_underscore=yes;;
+arm-apple-darwin*) fptools_cv_leading_underscore=yes;;
 
 *) AC_RUN_IFELSE([AC_LANG_SOURCE([[#ifdef HAVE_NLIST_H
 #include <nlist.h>
@@ -1942,7 +1946,7 @@ case "$1" in
     $2="linux"
     ;;
   # As far as I'm aware, none of these have relevant variants
-  freebsd|netbsd|openbsd|dragonfly|osf1|osf3|hpux|linuxaout|kfreebsdgnu|freebsd2|solaris2|cygwin32|mingw32|darwin|gnu|nextstep2|nextstep3|sunos4|ultrix|irix|aix|haiku)
+  freebsd|netbsd|openbsd|dragonfly|osf1|osf3|hpux|linuxaout|kfreebsdgnu|freebsd2|solaris2|cygwin32|mingw32|darwin|darwin10|gnu|nextstep2|nextstep3|sunos4|ultrix|irix|aix|haiku)
     $2="$1"
     ;;
   freebsd*) # like i686-gentoo-freebsd7
