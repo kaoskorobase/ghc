@@ -26,8 +26,10 @@ Executable ghc-pkg
                    binary,
                    bin-package-db,
                    bytestring
-    if !os(windows)
+    if !os(windows) && !ios(darwin10)
         Build-Depends: unix,
                        terminfo
     if os(windows)
         c-sources: CRT_noglob.c
+    if os(darwin10)
+        Build-Depends: unix
