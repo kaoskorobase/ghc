@@ -1160,11 +1160,31 @@ genLit env cmm@(CmmLabel l)
     in case ty of
             -- Make generic external label definition and then pointer to it
             Nothing -> do
-                let glob@(var, _) = genStringLabelRef label
-                let ldata = [CmmData Data [([glob], [])]]
-                let env' = funInsert label (pLower $ getVarType var) env
-                (v1, s1) <- doExpr lmty $ Cast LM_Ptrtoint var llvmWord
-                return (env', v1, unitOL s1, ldata)
+                -- iPhone: put references to external symbols into the data segment,
+                -- otherwise if the iPhone loader sees certain definitions, like this one...
+                --
+                -- foreign import ccall unsafe "static stdlib.h &free"
+                --       c_free_finalizer :: FunPtr (Ptr Word8 -> IO ())
+                --
+                -- ...then, presumably because free is external to the program, it tries
+                -- to resolve it at runtime. Unfortunately, this makes the text segment
+                -- writeable, and the dyld loader fails, because this operation is not
+                -- allowed on iPhone due to Apple's policy against self-modifying code.
+                --
+                -- Here we work around it by fetching the reference to the external symbol
+                -- from the data segment. This is really only necessary in the foreign
+                -- import case, so that's an improvement we could make.
+                let varGlob@(var, _) = genStringLabelRef label
+                    env' = funInsert label (pLower $ getVarType var) env
+                    refLabel = label `appendFS` fsLit "__ref"
+                    refTy = LMStruct [llvmWord]
+                    ref = LMGlobalVar refLabel (LMPointer refTy)
+                            Internal (Just $ fsLit "__DATA,__data") Nothing False
+                    refGlob = (ref, Just $ LMStaticStruc [LMPtoI (LMStaticPointer var) llvmWord] refTy)
+                    ldata = [CmmData Data [([varGlob, refGlob], [])]]
+                (v1, s1) <- doExpr (LMPointer llvmWord) $ GetElemPtr False ref [toIWord 0, toIWord 0]
+                (v2, s2) <- doExpr lmty $ Load v1
+                return (env', v2, unitOL s1 `snocOL` s2, ldata)
 
             -- Referenced data exists in this module, retrieve type and make
             -- pointer to it.
