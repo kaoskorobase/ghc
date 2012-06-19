@@ -207,7 +207,7 @@ data LlvmExpression
   {- |
     Load the value at location ptr
   -}
-  | Load LlvmVar
+  | Load Volatility LlvmVar
 
   {- |
     Navigate in an structure, selecting elements

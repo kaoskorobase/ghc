@@ -32,7 +32,7 @@ module Llvm (
 
         -- * Variables and Type System
         LlvmVar(..), LlvmStatic(..), LlvmLit(..), LlvmType(..),
-        LlvmAlias, LMGlobal, LMString, LMSection, LMAlign,
+        LlvmAlias, LMGlobal, LMString, LMSection, LMAlign, Volatility(..),
 
         -- ** Some basic types
         i64, i32, i16, i8, i1, i8Ptr, llvmWord, llvmWordPtr,

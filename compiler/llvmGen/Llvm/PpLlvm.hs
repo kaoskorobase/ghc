@@ -235,7 +235,7 @@ ppLlvmExpression expr
         Cast       op from to       -> ppCast op from to
         Compare    op left right    -> ppCmpOp op left right
         GetElemPtr inb ptr indexes  -> ppGetElementPtr inb ptr indexes
-        Load       ptr              -> ppLoad ptr
+        Load       vol ptr          -> ppLoad vol ptr
         Malloc     tp amount        -> ppMalloc tp amount
         Phi        tp precessors    -> ppPhi tp precessors
         Asm        asm c ty v se sk -> ppAsm asm c ty v se sk
@@ -316,8 +316,9 @@ ppSyncOrdering SyncRelease   = text "release"
 ppSyncOrdering SyncAcqRel    = text "acq_rel"
 ppSyncOrdering SyncSeqCst    = text "seq_cst"
 
-ppLoad :: LlvmVar -> Doc
-ppLoad var = text "load" <+> texts var
+ppLoad :: Volatility -> LlvmVar -> Doc
+ppLoad NotVolatile var = text "load" <+> texts var
+ppLoad Volatile var = text "load volatile" <+> texts var
 
 
 ppStore :: LlvmVar -> LlvmVar -> Doc

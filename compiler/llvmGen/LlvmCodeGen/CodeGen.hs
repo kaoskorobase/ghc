@@ -318,7 +318,7 @@ genCall env target res args ret = do
 
                     (v2, s2) <- doExpr ty $ Cast op v1 ty
                     let s3 = Store v2 vreg
-                    return (env3, allStmts `snocOL` s2 `snocOL` s3
+                    return (env3, allStmts `snocOL` s2 `snocOL` Comment [fsLit "blah 1"] `snocOL` s3
                                 `appOL` retStmt, top1 ++ top2 ++ top3)
 
 
@@ -339,7 +339,7 @@ getFunPtr env funTy targ = case targ of
                               ++ " call! (" ++ show (ty) ++ ")"
 
         (v2,s1) <- doExpr (pLift fty) $ Cast cast v1 (pLift fty)
-        return (env', v2, stmts `snocOL` s1, top)
+        return (env', v2, stmts `snocOL` Comment [fsLit "blah 2"] `snocOL` s1, top)
 
     CmmPrim mop _ -> litCase $ cmmPrimOpFunctions env mop
 
@@ -357,9 +357,12 @@ getFunPtr env funTy targ = case targ of
                     let fty@(LMFunction sig) = funTy name
                         fun = LMGlobalVar name (pLift ty') (funcLinkage sig)
                                     Nothing Nothing False
-                    (v1, s1) <- doExpr (pLift fty)
-                                    $ Cast LM_Bitcast fun (pLift fty)
-                    return  (env, v1, unitOL s1, [])
+                    (v1, s1, ldata) <- indirectly name (pLift fty) fun False
+                    {-
+                    (v2, s2) <- doExpr (pLift fty)
+                                $ Cast LM_Bitcast v1 (pLift fty)
+                                -}
+                    return  (env, v1, s1 `snocOL` Comment [fsLit "blah 3"], ldata)
 
                 Nothing -> do
                     -- label not in module, create external reference
@@ -390,7 +393,7 @@ arg_vars env (CmmHinted e AddrHint:rest) (vars, stmts, tops)
                            ++ show a ++ ")"
 
        (v2, s1) <- doExpr i8Ptr $ Cast op v1 i8Ptr
-       arg_vars env' rest (vars ++ [v2], stmts `appOL` stmts' `snocOL` s1,
+       arg_vars env' rest (vars ++ [v2], stmts `appOL` stmts' `snocOL` Comment [fsLit "blah 4"] `snocOL` s1,
                                tops ++ top')
 
 arg_vars env (CmmHinted e _:rest) (vars, stmts, tops)
@@ -517,7 +520,7 @@ genJump env expr live = do
     (stgRegs, stgStmts) <- funEpilogue env live
     let s2 = Expr $ Call TailCall v1 stgRegs llvmStdFunAttrs
     let s3 = Return Nothing
-    return (env', stmts `snocOL` s1 `appOL` stgStmts `snocOL` s2 `snocOL` s3,
+    return (env', stmts `snocOL` s1 `appOL` stgStmts `snocOL` s2 `snocOL` Comment [fsLit "blah 5"] `snocOL` s3,
             top)
 
 
@@ -585,7 +588,7 @@ genStore_fast env addr r n val
     in case isPointer grt && rem == 0 of
             True -> do
                 (env', vval,  stmts, top) <- exprToVar env val
-                (gv,  s1) <- doExpr grt $ Load gr
+                (gv,  s1) <- doExpr grt $ Load NotVolatile gr
                 (ptr, s2) <- doExpr grt $ GetElemPtr True gv [toI32 ix]
                 -- We might need a different pointer type, so check
                 case pLower grt == getVarType vval of
@@ -601,7 +604,7 @@ genStore_fast env addr r n val
                          (ptr', s3) <- doExpr ty $ Cast LM_Bitcast ptr ty
                          let s4 = MetaStmt meta $ Store vval ptr'
                          return (env',  stmts `snocOL` s1 `snocOL` s2
-                                 `snocOL` s3 `snocOL` s4, top)
+                                 `snocOL` s3 `snocOL` Comment [fsLit "blah 6"] `snocOL` s4, top)
 
             -- If its a bit type then we use the slow method since
             -- we can't avoid casting anyway.
@@ -728,12 +731,12 @@ exprToVarOpt env opt e = case e of
     -- reg pointer, call getCmmReg directly.
     CmmReg r -> do
         let (env', vreg, stmts, top) = getCmmReg env r
-        (v1, s1) <- doExpr (pLower $ getVarType vreg) $ Load vreg
+        (v1, s1) <- doExpr (pLower $ getVarType vreg) $ Load NotVolatile vreg
         case (isPointer . getVarType) v1 of
              True  -> do
                  -- Cmm wants the value, so pointer types must be cast to ints
                  (v2, s2) <- doExpr llvmWord $ Cast LM_Ptrtoint v1 llvmWord
-                 return (env', v2, stmts `snocOL` s1 `snocOL` s2, top)
+                 return (env', v2, stmts `snocOL` s1 `snocOL` s2 `snocOL` Comment [fsLit "blah 10"], top)
 
              False -> return (env', v1, stmts `snocOL` s1, top)
 
@@ -867,10 +870,10 @@ genMachOp_fast env opt op r n e
         (ix,rem) = n `divMod` ((llvmWidthInBits . pLower) grt  `div` 8)
     in case isPointer grt && rem == 0 of
             True -> do
-                (gv,  s1) <- doExpr grt $ Load gr
+                (gv,  s1) <- doExpr grt $ Load NotVolatile gr
                 (ptr, s2) <- doExpr grt $ GetElemPtr True gv [toI32 ix]
                 (var, s3) <- doExpr llvmWord $ Cast LM_Ptrtoint ptr llvmWord
-                return (env, var, unitOL s1 `snocOL` s2 `snocOL` s3, [])
+                return (env, var, unitOL s1 `snocOL` s2 `snocOL` s3 `snocOL` Comment [fsLit "blah 11"], [])
 
             False -> genMachOp_slow env opt op e
 
@@ -1067,13 +1070,13 @@ genLoad_fast env e r n ty =
         (ix,rem) = n `divMod` ((llvmWidthInBits . pLower) grt  `div` 8)
     in case isPointer grt && rem == 0 of
             True  -> do
-                (gv,  s1) <- doExpr grt $ Load gr
+                (gv,  s1) <- doExpr grt $ Load NotVolatile gr
                 (ptr, s2) <- doExpr grt $ GetElemPtr True gv [toI32 ix]
                 -- We might need a different pointer type, so check
                 case grt == ty' of
                      -- were fine
                      True -> do
-                         (var, s3) <- doExpr ty' (MetaExpr meta $ Load ptr)
+                         (var, s3) <- doExpr ty' (MetaExpr meta $ Load NotVolatile ptr)
                          return (env, var, unitOL s1 `snocOL` s2 `snocOL` s3,
                                      [])
 
@@ -1081,8 +1084,8 @@ genLoad_fast env e r n ty =
                      False -> do
                          let pty = pLift ty'
                          (ptr', s3) <- doExpr pty $ Cast LM_Bitcast ptr pty
-                         (var, s4) <- doExpr ty' (MetaExpr meta $ Load ptr')
-                         return (env, var, unitOL s1 `snocOL` s2 `snocOL` s3
+                         (var, s4) <- doExpr ty' (MetaExpr meta $ Load NotVolatile ptr')
+                         return (env, var, unitOL s1 `snocOL` s2 `snocOL` s3 `snocOL` Comment [fsLit "blah 7"]
                                     `snocOL` s4, [])
 
             -- If its a bit type then we use the slow method since
@@ -1098,14 +1101,14 @@ genLoad_slow env e ty meta = do
     case getVarType iptr of
          LMPointer _ -> do
                     (dvar, load) <- doExpr (cmmToLlvmType ty)
-                                           (MetaExpr meta $ Load iptr)
+                                           (MetaExpr meta $ Load NotVolatile iptr)
                     return (env', dvar, stmts `snocOL` load, tops)
 
          i@(LMInt _) | i == llvmWord -> do
                     let pty = LMPointer $ cmmToLlvmType ty
                     (ptr, cast)  <- doExpr pty $ Cast LM_Inttoptr iptr pty
                     (dvar, load) <- doExpr (cmmToLlvmType ty)
-                                           (MetaExpr meta $ Load ptr)
+                                           (MetaExpr meta $ Load NotVolatile ptr)
                     return (env', dvar, stmts `snocOL` cast `snocOL` load, tops)
 
          other -> pprPanic "exprToVar: CmmLoad expression is not right type!"
@@ -1143,6 +1146,35 @@ allocReg (CmmLocal (LocalReg un ty))
 allocReg _ = panic $ "allocReg: Global reg encountered! Global registers should"
                     ++ " have been handled elsewhere!"
 
+-- iPhone: put references to external symbols into the data segment,
+-- otherwise if the iPhone loader sees certain definitions, like this one...
+--
+-- foreign import ccall unsafe "static stdlib.h &free"
+--       c_free_finalizer :: FunPtr (Ptr Word8 -> IO ())
+--
+-- ...then, presumably because free is external to the program, it tries
+-- to resolve it at runtime. Unfortunately, this makes the text segment
+-- writeable, and the dyld loader fails, because this operation is not
+-- allowed on iPhone due to Apple's policy against self-modifying code.
+--
+-- Here we work around it by fetching the reference to the external symbol
+-- from the data segment. This is really only necessary in the foreign
+-- import case, so that's an improvement we could make.
+indirectly :: LMString -> LlvmType -> LlvmVar -> Bool
+           -> UniqSM (LlvmVar, OrdList LlvmStatement, [LlvmCmmDecl])
+indirectly label lmty var isInteger = do
+    refLabel <- ((label `appendFS` fsLit "_ref_" `appendFS`) . (fsLit . show)) `fmap` getUniqueUs
+    let refTy = LMStruct [lmty]
+        ref = LMGlobalVar refLabel (LMPointer refTy)
+                Internal (Just $ fsLit "__DATA,__data") Nothing False
+        cast = if isInteger then LMPtoI else LMBitc
+        refGlob = (ref, Just $ LMStaticStruc [cast (LMStaticPointer var) lmty] refTy)
+        ldata = [CmmData Data [([refGlob], [])]]
+    (v1, s1) <- doExpr (LMPointer lmty) $ GetElemPtr False ref [toIWord 0, toIWord 0]
+    -- If we don't use Volatile here, then llvm can optimize it back into the .text
+    -- segment, and the problem isn't solved.
+    (v, s2) <- doExpr lmty $ Load Volatile v1
+    return (v, unitOL s1 `snocOL` s2, ldata)
 
 -- | Generate code for a literal
 genLit :: LlvmEnv -> CmmLit -> UniqSM ExprData
@@ -1160,39 +1192,18 @@ genLit env cmm@(CmmLabel l)
     in case ty of
             -- Make generic external label definition and then pointer to it
             Nothing -> do
-                -- iPhone: put references to external symbols into the data segment,
-                -- otherwise if the iPhone loader sees certain definitions, like this one...
-                --
-                -- foreign import ccall unsafe "static stdlib.h &free"
-                --       c_free_finalizer :: FunPtr (Ptr Word8 -> IO ())
-                --
-                -- ...then, presumably because free is external to the program, it tries
-                -- to resolve it at runtime. Unfortunately, this makes the text segment
-                -- writeable, and the dyld loader fails, because this operation is not
-                -- allowed on iPhone due to Apple's policy against self-modifying code.
-                --
-                -- Here we work around it by fetching the reference to the external symbol
-                -- from the data segment. This is really only necessary in the foreign
-                -- import case, so that's an improvement we could make.
-                let varGlob@(var, _) = genStringLabelRef label
+                let glob@(var, _) = genStringLabelRef label
                     env' = funInsert label (pLower $ getVarType var) env
-                    refLabel = label `appendFS` fsLit "__ref"
-                    refTy = LMStruct [llvmWord]
-                    ref = LMGlobalVar refLabel (LMPointer refTy)
-                            Internal (Just $ fsLit "__DATA,__data") Nothing False
-                    refGlob = (ref, Just $ LMStaticStruc [LMPtoI (LMStaticPointer var) llvmWord] refTy)
-                    ldata = [CmmData Data [([varGlob, refGlob], [])]]
-                (v1, s1) <- doExpr (LMPointer llvmWord) $ GetElemPtr False ref [toIWord 0, toIWord 0]
-                (v2, s2) <- doExpr lmty $ Load v1
-                return (env', v2, unitOL s1 `snocOL` s2, ldata)
+                (v1, s1, ldata) <- indirectly label lmty var True
+                return (env', v1, s1 `snocOL` Comment [fsLit "blah 9a"], [CmmData Data [([glob], [])]] ++ ldata)
 
             -- Referenced data exists in this module, retrieve type and make
             -- pointer to it.
             Just ty' -> do
                 let var = LMGlobalVar label (LMPointer ty')
                             ExternallyVisible Nothing Nothing False
-                (v1, s1) <- doExpr lmty $ Cast LM_Ptrtoint var llvmWord
-                return (env, v1, unitOL s1, [])
+                (v1, s1, ldata) <- indirectly label lmty var True
+                return (env, v1, s1 `snocOL` Comment [fsLit "blah 9b"], ldata)
 
 genLit env (CmmLabelOff label off) = do
     (env', vlbl, stmts, stat) <- genLit env (CmmLabel label)
@@ -1251,7 +1262,7 @@ funEpilogue env (Just live) | dopt Opt_RegLiveness (getDflags env) = do
   where
     loadExpr r | r `elem` alwaysLive || r `elem` live = do
         let reg  = lmGlobalRegVar r
-        (v,s) <- doExpr (pLower $ getVarType reg) $ Load reg
+        (v,s) <- doExpr (pLower $ getVarType reg) $ Load NotVolatile reg
         return (v, unitOL s)
     loadExpr r = do
         let ty = (pLower . getVarType $ lmGlobalRegVar r)
@@ -1265,7 +1276,7 @@ funEpilogue _ _ = do
   where
     loadExpr r = do
         let reg  = lmGlobalRegVar r
-        (v,s) <- doExpr (pLower $ getVarType reg) $ Load reg
+        (v,s) <- doExpr (pLower $ getVarType reg) $ Load NotVolatile reg
         return (v, unitOL s)
 
 
@@ -1311,7 +1322,7 @@ getHsFunc env lbl
                             Nothing Nothing False
             (v1, s1) <- doExpr (pLift llvmFunTy) $
                             Cast LM_Bitcast fun (pLift llvmFunTy)
-            return (env, v1, unitOL s1, [])
+            return (env, v1, unitOL s1 `snocOL` Comment [fsLit "blah 8"], [])
 
         -- label not in module, create external reference
         Nothing  -> do

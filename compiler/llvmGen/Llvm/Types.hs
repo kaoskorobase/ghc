@@ -820,3 +820,5 @@ fixEndian = id
 fixEndian = reverse
 #endif
 
+data Volatility = Volatile | NotVolatile deriving (Eq, Show)
+
