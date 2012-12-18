@@ -8,7 +8,7 @@ esac
 
 export TARGET_PLATFORM="$DEVELOPER_DIR/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS${SDK_VERSION}.sdk"
 export TARGET_BIN="$DEVELOPER_DIR/Platforms/iPhoneOS.platform/Developer/usr/bin"
-export TARGET_GCC=$TARGET_BIN/arm-apple-${TARGET_DARWIN_VERSION}-llvm-gcc-${GCC_VERSION}
+export TARGET_GCC=$TARGET_BIN/arm-apple-darwin${TARGET_DARWIN_VERSION}-llvm-gcc-${GCC_VERSION}
 export TARGET_CLANG=clang
 export TARGET_LD=$TARGET_CLANG
 
@@ -18,7 +18,7 @@ export TARGET_LDFLAGS="-L$TARGET_PLATFORM/usr/lib/"
 
 export LOCAL_PLATFORM="$DEVELOPER_DIR/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator${SDK_VERSION}.sdk"
 export LOCAL_BIN="$DEVELOPER_DIR/Platforms/iPhoneSimulator.platform/Developer/usr/bin"
-export LOCAL_GCC=$LOCAL_BIN/i686-apple-${LOCAL_DARWIN_VERSION}-llvm-gcc-${GCC_VERSION}
+export LOCAL_GCC=$LOCAL_BIN/i686-apple-darwin${LOCAL_DARWIN_VERSION}-llvm-gcc-${GCC_VERSION}
 export LOCAL_LD=$TARGET_GCC
 export LOCAL_CPPFLAGS="-I$LOCAL_PLATFORM/usr/include/"
 export LOCAL_CFLAGS="-isysroot $LOCAL_PLATFORM -march=i386"
